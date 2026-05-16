@@ -16,7 +16,28 @@ const userSchema = new mongoose.Schema({
     userPhoneNumber: {
         type: Number, 
         required: true
-    }
+    },
+    cart: [{
+        bookName: String,
+        bookImage: String,
+        bookDescription: String,
+        bookRating: Number,
+        quantity: { type: Number, default: 1 }
+    }],
+    wishlist: [{
+        bookName: String,
+        bookImage: String,
+        bookDescription: String,
+        bookRating: Number
+    }],
+    addresses: [{
+        flat: String,
+        area: String,
+        landmark: String,
+        city: String,
+        state: String,
+        pincode: Number
+    }]
 },{
     timestamps: true
 })

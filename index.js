@@ -315,11 +315,121 @@ const verifyJWT = (req, res, next) => {
   }
 };
 
-//get all orders
+// cart, wishlist, addresses for logged-in user only
 
-async function getOrder() {
+app.get('/user/me/cart', verifyJWT, async (req, res) => {
   try {
-    return await Order.find().sort({ createdAt: -1 });
+    const user = await User.findById(req.user.id).select('cart');
+    if (!user) {
+      return res.status(404).json({ message: 'User not found.' });
+    }
+    res.status(200).json(user.cart || []);
+  } catch (error) {
+    res.status(500).json({ message: 'Error fetching cart', error: error.message });
+  }
+});
+
+app.put('/user/me/cart', verifyJWT, async (req, res) => {
+  try {
+    const cart = Array.isArray(req.body) ? req.body : req.body.cart;
+    if (!Array.isArray(cart)) {
+      return res.status(400).json({ message: 'Cart must be an array (or use { cart: [...] }).' });
+    }
+    const user = await User.findByIdAndUpdate(
+      req.user.id,
+      { $set: { cart } },
+      { new: true, runValidators: true }
+    ).select('cart');
+    if (!user) {
+      return res.status(404).json({ message: 'User not found.' });
+    }
+    res.status(200).json({ message: 'Cart updated', cart: user.cart });
+  } catch (error) {
+    res.status(500).json({ message: 'Error updating cart', error: error.message });
+  }
+});
+
+app.get('/user/me/wishlist', verifyJWT, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).select('wishlist');
+    if (!user) {
+      return res.status(404).json({ message: 'User not found.' });
+    }
+    res.status(200).json(user.wishlist || []);
+  } catch (error) {
+    res.status(500).json({ message: 'Error fetching wishlist', error: error.message });
+  }
+});
+
+app.put('/user/me/wishlist', verifyJWT, async (req, res) => {
+  try {
+    const wishlist = Array.isArray(req.body) ? req.body : req.body.wishlist;
+    if (!Array.isArray(wishlist)) {
+      return res.status(400).json({ message: 'Wishlist must be an array (or use { wishlist: [...] }).' });
+    }
+    const user = await User.findByIdAndUpdate(
+      req.user.id,
+      { $set: { wishlist } },
+      { new: true, runValidators: true }
+    ).select('wishlist');
+    if (!user) {
+      return res.status(404).json({ message: 'User not found.' });
+    }
+    res.status(200).json({ message: 'Wishlist updated', wishlist: user.wishlist });
+  } catch (error) {
+    res.status(500).json({ message: 'Error updating wishlist', error: error.message });
+  }
+});
+
+app.get('/user/me/addresses', verifyJWT, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).select('addresses');
+    if (!user) {
+      return res.status(404).json({ message: 'User not found.' });
+    }
+    res.status(200).json(user.addresses || []);
+  } catch (error) {
+    res.status(500).json({ message: 'Error fetching addresses', error: error.message });
+  }
+});
+
+app.post('/user/me/addresses', verifyJWT, async (req, res) => {
+  try {
+    const user = await User.findByIdAndUpdate(
+      req.user.id,
+      { $push: { addresses: req.body } },
+      { new: true, runValidators: true }
+    ).select('addresses');
+    if (!user) {
+      return res.status(404).json({ message: 'User not found.' });
+    }
+    res.status(201).json({ message: 'Address added', addresses: user.addresses });
+  } catch (error) {
+    res.status(500).json({ message: 'Error adding address', error: error.message });
+  }
+});
+
+app.delete('/user/me/addresses/:addressId', verifyJWT, async (req, res) => {
+  try {
+    const user = await User.findByIdAndUpdate(
+      req.user.id,
+      { $pull: { addresses: { _id: req.params.addressId } } },
+      { new: true }
+    ).select('addresses');
+    if (!user) {
+      return res.status(404).json({ message: 'User not found.' });
+    }
+    res.status(200).json({ message: 'Address removed', addresses: user.addresses });
+  } catch (error) {
+    res.status(500).json({ message: 'Error removing address', error: error.message });
+  }
+});
+
+//get orders for logged-in user only
+
+async function getOrderByUser(userId) {
+  try {
+    return await Order.find({ user: userId }).sort({ createdAt: -1 });
   } catch (error) {
     throw error;
   }
@@ -327,7 +437,7 @@ async function getOrder() {
 
 app.get('/order', verifyJWT, async (req, res) => {
   try {
-    const order = await getOrder();
+    const order = await getOrderByUser(req.user.id);
     if (order.length !== 0) {
       res.status(200).json(order);
     } else {
@@ -341,27 +451,31 @@ app.get('/order', verifyJWT, async (req, res) => {
 
 //place order
 
-async function placeOrder(orderData){
-    try{
-        const newOrder = new Order({...orderData, orderDateTime: new Date()})
-        return await newOrder.save()
-    }catch(error){
-        throw error
-    }
+async function placeOrder(orderData, userId) {
+  try {
+    const newOrder = new Order({
+      ...orderData,
+      user: userId,
+      orderDateTime: new Date(),
+    });
+    return await newOrder.save();
+  } catch (error) {
+    throw error;
+  }
 }
 
-app.post('/order', verifyJWT, async(req,res) => {
-    try{
-        const savedOrder = await placeOrder(req.body)
-        if(savedOrder){
-            res.status(200).json(savedOrder)
-        } else {
-            res.status(404).json({message: 'No order found.'})
-        }
-    }catch(error){
-        res.status(500).json({message: 'Error while placing order', error: error.message})
+app.post('/order', verifyJWT, async (req, res) => {
+  try {
+    const savedOrder = await placeOrder(req.body, req.user.id);
+    if (savedOrder) {
+      res.status(200).json(savedOrder);
+    } else {
+      res.status(404).json({ message: 'No order found.' });
     }
-})
+  } catch (error) {
+    res.status(500).json({ message: 'Error while placing order', error: error.message });
+  }
+});
 
 // current logged-in user
 app.get('/user/me', verifyJWT, async (req, res) => {
