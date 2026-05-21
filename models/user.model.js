@@ -31,12 +31,14 @@ const userSchema = new mongoose.Schema({
         bookRating: Number
     }],
     addresses: [{
+        nickname: String,
         flat: String,
         area: String,
         landmark: String,
         city: String,
         state: String,
-        pincode: Number
+        pincode: Number,
+        customerPhone: String
     }]
 },{
     timestamps: true
